@@ -117,6 +117,8 @@ h1{font-size:36px;line-height:45px;font-weight:700;background:var(--grad);-webki
 .vp button{flex:none;height:28px;padding:0 10px;border-radius:9999px;font-weight:500;color:var(--s700);white-space:nowrap}
 .vp button:hover{background:var(--s100)}
 .vp button[aria-pressed=true]{background:var(--navy);color:#fff}
+.vp.mini{padding:4px}
+.vp button.vp-open{display:flex;align-items:center;gap:4px;font-weight:600;color:var(--s700)}
 .vp button.vp-x{display:grid;place-items:center;width:28px;padding:0;margin-left:auto;color:var(--s500)}
 .tip{position:absolute;z-index:6;display:none;align-items:center;gap:8px;padding:6px 12px;border-radius:9999px;background:var(--navy);color:#fff;font-size:12px;line-height:16px;font-weight:700;white-space:nowrap;pointer-events:none;transform:translate(-50%,calc(-100% - 8px))}
 .tip span{font-weight:500;color:var(--s300)}
@@ -450,6 +452,7 @@ const AREAS={
  conference:{id:'conference',vb:[40,100,2900,2340],spots:named(CONF_NAMED,'conference'),decor:conferenceDecor(),entrance:[1525,2320],
   structures:[['M1060 2280H2260V2410H1060Z','#dfe6f0'],['M2477 975H2900V1445H2477Z','#dfe6f0'],['M60 1089H457V1326H60Z','#dfe6f0'],[CONF_OUT,'#fff'],['M2151 131H2291V190H2151Z','#fff'],['M1053 1089h939v956h-939Z','r'],['M1037 190H2021V856H1037Z','r'],['M817 1326H1053V1566H817Z','r'],['M1992 1089H2004A240 356 0 0 0 2244 1445V2045H1992Z','r'],['M801 190H1037V737H801Z','h'],['M817 1089H1053V1270H817Z','h'],['M549 1326H817V1566H1053V2045H935V2280H576V2045H549Z','h'],['M2244 2189H2477V2280H2244Z','h']],
   walls:'M549 1089V1326M817 1089V1326M576 2280H2477M2244 2045V2280M2477 975V1445',outline:CONF_OUT,
+  draw:{rooms:{'M1053 1089h939v956h-939Z':'M1335 2045H1053V1089H1992V2045H1715M1655 2045H1625M1565 2045H1485M1425 2045H1395'},walls:'M549 1089V1326M817 1089V1326M2244 2045V2280M2477 975V1445',outline:'M576 2280V2045H549V1326H457V1089H726V999H801V190H2417V975H2477V1445H2419V2045H2477V2280H1720M1660 2280H1625M1565 2280H1482M1422 2280H1390M1330 2280H576',door:'M1335 2045H1395M1425 2045H1485M1565 2045H1625M1655 2045H1715M1330 2280H1390M1422 2280H1482M1565 2280H1625M1660 2280H1720',gate:''},
   walk:[[[801,190],[2417,190],[2417,975],[2477,975],[2477,1445],[2419,1445],[2419,2045],[2477,2045],[2477,2280],[576,2280],[576,2045],[549,2045],[549,1326],[457,1326],[457,1089],[726,1089],[726,999],[801,999]],[[1400,2280],[1650,2280],[1650,2345],[1400,2345]]],doors:[[549,1170],[549,1245],[817,1298],[932,1326],[1053,1298],[1992,1457],[1365,2045],[1455,2045],[1595,2045],[1685,2045],[1360,2280],[1452,2280],[1595,2280],[1690,2280],[2244,2001],[2244,2114],[1237,856],[2021,472],[2477,1060],[2477,1210],[2477,1360]]}
 };
 
@@ -459,7 +462,7 @@ const doorParam=testParams.get('door')==='blue'?'dash-blue':testParams.get('door
 const DOOR_OPTIONS=[['dash','Dash'],['dash-blue','Dash biru'],['line','Garis'],['line-blue','Garis biru'],['gap','Tanpa garis']];
 let DOOR=DOOR_OPTIONS.some(o=>o[0]===doorParam)?doorParam:'dash';
 let GATE=['dash','open'].includes(testParams.get('gate'))?testParams.get('gate'):(DOOR==='gap'?'open':'dash');
-let testPanel=testParams.get('panel')!=='0';
+let testPanel=testParams.get('panel')!=='0',vpOpen=true;
 const state={lang:'en',area:'expo',filter:null,q:'',sel:null,route:null,reversed:false,mini:false};
 const t=()=>COPY[state.lang];
 const catName=c=>CAT[c][state.lang==='en'?0:1];
@@ -517,19 +520,22 @@ function renderMap(){
  const a=AREAS[state.area],[ex,ey]=a.entrance;
  plan.setAttribute('viewBox',a.vb.join(' '));
  $('#map').setAttribute('aria-label',state.area==='expo'?t().expoArea:t().confArea);
- const st=a.structures.map(([d,f])=>f==='r'?`<path d="${d}" fill="#eef2f8" stroke="#b8c4d6" stroke-width="4"/>`:`<path d="${d}" fill="${f==='h'?'url(#hatch)':f}"/>`).join('');
- const dr=a.draw;
+ const dr=a.draw,rooms=dr&&dr.rooms||{};
+ const st=a.structures.map(([d,f])=>rooms[d]?`<path d="${d}" fill="#eef2f8"/><path d="${rooms[d]}" fill="none" stroke="#64748b" stroke-width="8" stroke-linejoin="round"/>`:f==='r'?`<path d="${d}" fill="#eef2f8" stroke="#b8c4d6" stroke-width="4"/>`:`<path d="${d}" fill="${f==='h'?'url(#hatch)':f}"/>`).join('');
  plan.innerHTML=hatchPattern+`<g id="cam">${st}<path d="${dr?dr.walls:a.walls}" fill="none" stroke="#b8c4d6" stroke-width="4" stroke-linecap="round"/><path d="${dr?dr.outline:a.outline}" fill="none" stroke="#64748b" stroke-width="8" stroke-linejoin="round"/><g id="doors">${doorSvg()}</g>${a.decor.map(([x,y,w,h])=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="#9fb0c8" pointer-events="none"/>`).join('')}${a.spots.map(spotSvg).join('')}<g pointer-events="none"><circle cx="${ex}" cy="${ey+6}" r="22" fill="#041365"/><path d="M${ex} ${ey-6}l-10 10m10-10l10 10m-10-10v24" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/><text id="entr" x="${ex+32}" y="${ey+14}" font-size="24" font-weight="700" fill="#041365">${esc(t().entrance)}</text></g><g id="routeG" pointer-events="none"></g><g id="selG" pointer-events="none"></g></g>`;
  syncDim();drawSelection();renderVariants();
 }
 function doorSvg(){
  const dr=AREAS[state.area].draw;if(!dr)return'';
  const color=DOOR.endsWith('blue')?'#0093fd':DOOR==='line'?'#94a3b8':'#64748b',line=d=>`<path class="door${DOOR.startsWith('line')?' solid':''}" d="${d}" stroke="${color}"/>`;
- return(DOOR==='gap'?'':line(dr.door))+(GATE==='open'?'':line(dr.gate))}
+ return(DOOR==='gap'?'':line(dr.door))+(GATE==='open'||!dr.gate?'':line(dr.gate))}
 function renderVariants(){
- const v=$('#variants'),show=testPanel&&state.area==='expo';v.hidden=!show;if(!show)return;
- const btn=(k,val,label,on)=>`<button data-${k}="${val}" aria-pressed="${on}">${label}</button>`;
- v.innerHTML=`<div class="vp-row"><span>Pintu</span>${DOOR_OPTIONS.map(([k,l])=>btn('door',k,l,DOOR===k)).join('')}</div><div class="vp-row"><span>Gerbang</span>${btn('gate','dash','Ikuti pintu',GATE==='dash')}${btn('gate','open','Terbuka',GATE==='open')}<button class="vp-x" data-vp="close" aria-label="Sembunyikan panel varian">${ic('x',14)}</button></div>`}
+ const dr=AREAS[state.area].draw,v=$('#variants'),show=testPanel&&!!dr;v.hidden=!show;if(!show)return;
+ const btn=(k,val,label,on)=>`<button data-${k}="${val}" aria-pressed="${on}">${label}</button>`,close=`<button class="vp-x" data-vp="collapse" aria-label="Kecilkan panel varian">${ic('x',14)}</button>`;
+ v.classList.toggle('mini',!vpOpen);
+ if(!vpOpen){v.innerHTML=`<button class="vp-open" data-vp="expand">Varian pintu ${ic('chevron-down',14)}</button>`;return}
+ const gate=dr.gate?`<div class="vp-row"><span>Gerbang</span>${btn('gate','dash','Ikuti pintu',GATE==='dash')}${btn('gate','open','Terbuka',GATE==='open')}${close}</div>`:'';
+ v.innerHTML=`<div class="vp-row"><span>Pintu</span>${DOOR_OPTIONS.map(([k,l])=>btn('door',k,l,DOOR===k)).join('')}${gate?'':close}</div>${gate}`}
 function setVariant(door,gate){DOOR=door;GATE=gate;$('#doors').innerHTML=doorSvg();renderVariants();syncUrl()}
 function syncDim(){const a=AREAS[state.area];plan.querySelectorAll('.spot').forEach(g=>{const s=a.spots.find(x=>x.id===g.dataset.id);g.classList.toggle('dim',!matches(s))})}
 function drawSelection(){
@@ -692,7 +698,7 @@ document.addEventListener('click',e=>{
  const b=e.target.closest('button,[data-id]');const pop=$('#pop'),more=$('#more');
  if(b&&b.dataset.door){const d=b.dataset.door;setVariant(d,d==='gap'?'open':DOOR==='gap'?'dash':GATE);return}
  if(b&&b.dataset.gate){setVariant(DOOR,b.dataset.gate);return}
- if(b&&b.dataset.vp){testPanel=false;renderVariants();syncUrl();return}
+ if(b&&b.dataset.vp){vpOpen=b.dataset.vp==='expand';renderVariants();return}
  if(pop&&pop.classList.contains('open')&&!e.target.closest('#pop,#more')){pop.classList.remove('open');more.setAttribute('aria-expanded','false')}
  if(!b)return;
  if(b.id==='lang'){state.lang=state.lang==='en'?'id':'en';renderChrome();renderList();renderMap();renderDetail();applyCam();drawRoute();syncUrl();return}
