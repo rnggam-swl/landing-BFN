@@ -21,6 +21,7 @@ export const NAV_LINKS: Link[] = [
   { label: "About BFN", href: "#about" },
   { label: "Schedule", href: "#schedule" },
   { label: "Speakers", href: "#speakers" },
+  { label: "Maps", href: `${import.meta.env.BASE_URL}maps/index.html` },
   { label: "Exhibitors", href: "#" },
   { label: "Job Fair", href: "#" },
   { label: "News", href: "#" },
