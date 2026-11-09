@@ -94,6 +94,7 @@ h1{font-size:36px;line-height:45px;font-weight:700;background:var(--grad);-webki
 #plan.drag{cursor:grabbing}
 .door{fill:none;stroke-width:1.5px;stroke-dasharray:4 3;vector-effect:non-scaling-stroke;pointer-events:none}
 .door.solid{stroke-dasharray:none}
+.jamb{fill:none;stroke:#0093fd;stroke-width:3px;stroke-linecap:round;vector-effect:non-scaling-stroke;pointer-events:none}
 .spot{cursor:pointer;transition:opacity .2s ease-out}
 .spot .shape{stroke-width:1px;vector-effect:non-scaling-stroke;transition:filter .2s}
 .spot:hover .shape{filter:brightness(.92)}
@@ -109,11 +110,13 @@ h1{font-size:36px;line-height:45px;font-weight:700;background:var(--grad);-webki
 .ctrl{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--s200);border-radius:50%;background:#fff;color:var(--s700);box-shadow:0 1px 2px rgba(0,0,0,.05)}
 .ctrl:hover{background:var(--s50)}
 .ctrl:first-child{margin-bottom:6px}
-.vp{position:absolute;z-index:5;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;max-width:calc(100% - 24px);padding:8px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px var(--s200),0 4px 6px -1px rgba(0,0,0,.1);font-size:12px;line-height:16px}
+.vp{position:absolute;z-index:5;top:12px;right:12px;display:flex;flex-direction:column;gap:6px;width:min(380px,calc(100% - 24px));padding:8px;border-radius:12px;background:#fff;box-shadow:0 0 0 1px var(--s200),0 4px 6px -1px rgba(0,0,0,.1);font-size:12px;line-height:16px}
 .vp[hidden]{display:none}
-.vp-row{display:flex;align-items:center;gap:4px;overflow-x:auto;scrollbar-width:none}
+.vp-row{display:flex;align-items:flex-start;gap:4px}
+.vp-opts{flex:1;display:flex;flex-wrap:wrap;gap:4px}
 .vp-row::-webkit-scrollbar{display:none}
-.vp-row span{flex:none;width:52px;font-weight:600;color:var(--s500)}
+.vp-row>span{flex:none;width:52px;line-height:28px;font-weight:600;color:var(--s500)}
+.vp.mini{width:auto}
 .vp button{flex:none;height:28px;padding:0 10px;border-radius:9999px;font-weight:500;color:var(--s700);white-space:nowrap}
 .vp button:hover{background:var(--s100)}
 .vp button[aria-pressed=true]{background:var(--navy);color:#fff}
@@ -456,10 +459,10 @@ const AREAS={
   walk:[[[801,190],[2417,190],[2417,975],[2477,975],[2477,1445],[2419,1445],[2419,2045],[2477,2045],[2477,2280],[576,2280],[576,2045],[549,2045],[549,1326],[457,1326],[457,1089],[726,1089],[726,999],[801,999]],[[1400,2280],[1650,2280],[1650,2345],[1400,2345]]],doors:[[549,1170],[549,1245],[817,1298],[932,1326],[1053,1298],[1992,1457],[1365,2045],[1455,2045],[1595,2045],[1685,2045],[1360,2280],[1452,2280],[1595,2280],[1690,2280],[2244,2001],[2244,2114],[1237,856],[2021,472],[2477,1060],[2477,1210],[2477,1360]]}
 };
 
-/* Door test variants: ?door=dash|dash-blue|line|line-blue|gap and ?gate=dash|open */
+/* Door test variants: ?door=dash|dash-blue|line|line-blue|gap|jamb|jamb-dash and ?gate=dash|open */
 const testParams=new URLSearchParams(location.search);
 const doorParam=testParams.get('door')==='blue'?'dash-blue':testParams.get('door');
-const DOOR_OPTIONS=[['dash','Dash'],['dash-blue','Dash biru'],['line','Garis'],['line-blue','Garis biru'],['gap','Tanpa garis']];
+const DOOR_OPTIONS=[['dash','Dash'],['dash-blue','Dash biru'],['line','Garis'],['line-blue','Garis biru'],['gap','Tanpa garis'],['jamb','Kusen biru'],['jamb-dash','Kusen + dash']];
 let DOOR=DOOR_OPTIONS.some(o=>o[0]===doorParam)?doorParam:'dash';
 let GATE=['dash','open'].includes(testParams.get('gate'))?testParams.get('gate'):(DOOR==='gap'?'open':'dash');
 let testPanel=testParams.get('panel')!=='0',vpOpen=true;
@@ -527,6 +530,9 @@ function renderMap(){
 }
 function doorSvg(){
  const dr=AREAS[state.area].draw;if(!dr)return'';
+ if(DOOR.startsWith('jamb')){
+  const d=dr.door+(GATE==='open'?'':dr.gate),ends=[...d.matchAll(/M([\d.]+) ([\d.]+)H([\d.]+)/g)].flatMap(m=>[[m[1],m[2]],[m[3],m[2]]]);
+  return(DOOR==='jamb-dash'?`<path class="door" d="${d}" stroke="#0093fd"/>`:'')+ends.map(([x,y])=>`<path class="jamb" data-x="${x}" data-y="${y}"/>`).join('')}
  const color=DOOR.endsWith('blue')?'#0093fd':DOOR==='line'?'#94a3b8':'#64748b',line=d=>`<path class="door${DOOR.startsWith('line')?' solid':''}" d="${d}" stroke="${color}"/>`;
  return(DOOR==='gap'?'':line(dr.door))+(GATE==='open'||!dr.gate?'':line(dr.gate))}
 function renderVariants(){
@@ -534,9 +540,10 @@ function renderVariants(){
  const btn=(k,val,label,on)=>`<button data-${k}="${val}" aria-pressed="${on}">${label}</button>`,close=`<button class="vp-x" data-vp="collapse" aria-label="Kecilkan panel varian">${ic('x',14)}</button>`;
  v.classList.toggle('mini',!vpOpen);
  if(!vpOpen){v.innerHTML=`<button class="vp-open" data-vp="expand">Varian pintu ${ic('chevron-down',14)}</button>`;return}
- const gate=dr.gate?`<div class="vp-row"><span>Gerbang</span>${btn('gate','dash','Ikuti pintu',GATE==='dash')}${btn('gate','open','Terbuka',GATE==='open')}${close}</div>`:'';
- v.innerHTML=`<div class="vp-row"><span>Pintu</span>${DOOR_OPTIONS.map(([k,l])=>btn('door',k,l,DOOR===k)).join('')}${gate?'':close}</div>${gate}`}
-function setVariant(door,gate){DOOR=door;GATE=gate;$('#doors').innerHTML=doorSvg();renderVariants();syncUrl()}
+ const gate=dr.gate?`<div class="vp-row"><span>Gerbang</span><div class="vp-opts">${btn('gate','dash','Ikuti pintu',GATE==='dash')}${btn('gate','open','Terbuka',GATE==='open')}</div>${close}</div>`:'';
+ v.innerHTML=`<div class="vp-row"><span>Pintu</span><div class="vp-opts">${DOOR_OPTIONS.map(([k,l])=>btn('door',k,l,DOOR===k)).join('')}</div>${gate?'':close}</div>${gate}`}
+function sizeJambs(){const h=6/(units().ppu*cam.k);document.querySelectorAll('.jamb').forEach(p=>{const y=+p.dataset.y;p.setAttribute('d',`M${p.dataset.x} ${y-h}V${y+h}`)})}
+function setVariant(door,gate){DOOR=door;GATE=gate;$('#doors').innerHTML=doorSvg();sizeJambs();renderVariants();syncUrl()}
 function syncDim(){const a=AREAS[state.area];plan.querySelectorAll('.spot').forEach(g=>{const s=a.spots.find(x=>x.id===g.dataset.id);g.classList.toggle('dim',!matches(s))})}
 function drawSelection(){
  const g=$('#selG');if(!g)return;const s=spotById(state.sel);
@@ -564,7 +571,7 @@ function applyCam(){
  if(!Number.isFinite(cam.x+cam.y+cam.k))Object.assign(cam,{x:0,y:0,k:1});
  g.setAttribute('transform',`translate(${cam.x} ${cam.y}) scale(${cam.k})`);
  plan.classList.toggle('codes',cam.k>=1.5);
- sizeRoute();
+ sizeRoute();sizeJambs();
 }
 function moveCam(to,ms=500){
  cancelAnimationFrame(camAnim);
