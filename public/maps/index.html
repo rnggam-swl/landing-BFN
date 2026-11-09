@@ -455,6 +455,8 @@ const AREAS={
  conference:{id:'conference',vb:[40,100,2900,2340],spots:named(CONF_NAMED,'conference'),decor:conferenceDecor(),entrance:[1525,2320],
   structures:[['M1060 2280H2260V2410H1060Z','#dfe6f0'],['M2477 975H2900V1445H2477Z','#dfe6f0'],['M60 1089H457V1326H60Z','#dfe6f0'],[CONF_OUT,'#fff'],['M2151 131H2291V190H2151Z','#fff'],['M1053 1089h939v956h-939Z','r'],['M1037 190H2021V856H1037Z','r'],['M817 1326H1053V1566H817Z','r'],['M1992 1089H2004A240 356 0 0 0 2244 1445V2045H1992Z','r'],['M801 190H1037V737H801Z','h'],['M817 1089H1053V1270H817Z','h'],['M549 1326H817V1566H1053V2045H935V2280H576V2045H549Z','h'],['M2244 2189H2477V2280H2244Z','h']],
   walls:'M549 1089V1326M817 1089V1326M576 2280H2477M2244 2045V2280M2477 975V1445',outline:CONF_OUT,
+  /* Rooms are destinations, not shortcuts: routes only enter one when the start or destination is inside it */
+  rooms:[[[1053,1089],[1992,1089],[1992,2045],[1053,2045]],[[1992,1089],[2004,1089],[2244,1445],[2244,2045],[1992,2045]],[[817,1326],[1053,1326],[1053,1566],[817,1566]],[[1037,190],[2021,190],[2021,856],[1037,856]]],
   draw:{rooms:{'M1053 1089h939v956h-939Z':'M1335 2045H1053V1089H1992V2045H1715M1655 2045H1625M1565 2045H1485M1425 2045H1395'},walls:'M549 1089V1326M817 1089V1326M2244 2045V2280M2477 975V1445',outline:'M576 2280V2045H549V1326H457V1089H726V999H801V190H2417V975H2477V1445H2419V2045H2477V2280H1720M1660 2280H1625M1565 2280H1482M1422 2280H1390M1330 2280H576',door:'M1335 2045H1395M1425 2045H1485M1565 2045H1625M1655 2045H1715M1330 2280H1390M1422 2280H1482M1565 2280H1625M1660 2280H1720',gate:''},
   walk:[[[801,190],[2417,190],[2417,975],[2477,975],[2477,1445],[2419,1445],[2419,2045],[2477,2045],[2477,2280],[576,2280],[576,2045],[549,2045],[549,1326],[457,1326],[457,1089],[726,1089],[726,999],[801,999]],[[1400,2280],[1650,2280],[1650,2345],[1400,2345]]],doors:[[549,1170],[549,1245],[817,1298],[932,1326],[1053,1298],[1992,1457],[1365,2045],[1455,2045],[1595,2045],[1685,2045],[1360,2280],[1452,2280],[1595,2280],[1690,2280],[2244,2001],[2244,2114],[1237,856],[2021,472],[2477,1060],[2477,1210],[2477,1360]]}
 };
@@ -615,6 +617,7 @@ function findPath(a,start,startRect,goalRect,opt={}){
   const near=inRect(goalRect,x,y,48)||(startRect&&inRect(startRect,x,y,48))||Math.hypot(x-start[0],y-start[1])<56;
   let ok=near||a.walk.some(p=>inPoly(p,x,y));
   if(ok&&!near)ok=!solid.some(s=>inRect(s.rect,x,y,opt.clear??14));
+  if(ok&&opt.block&&opt.block.some(p=>inPoly(p,x,y)))ok=false;
   if(ok&&!(opt.through&&near)){
    if(bar.closed.some(p=>inPoly(p,x,y)))ok=false;
    else if(bar.segs.some(([p,q])=>segDist(p,q,x,y)<(opt.clear?6:12))&&!a.doors.some(d=>Math.hypot(x-d[0],y-d[1])<44)&&!(a.opening&&inRect(a.opening,x,y)))ok=false}
@@ -647,8 +650,9 @@ function buildRoute(){
  else{
   const start=fromSpot?[fromSpot.rect[0]+fromSpot.rect[2]/2,fromSpot.rect[1]+fromSpot.rect[3]/2]:a.entrance;
   const cx=s.rect[0]+s.rect[2]/2,cy=s.rect[1]+s.rect[3]/2,outside=!a.walk.some(p=>inPoly(p,cx,cy)),enclosed=s.region||s.path||s.id==='holding-room';
-  const opts={through:outside,margin:enclosed?0:14},run=o=>findPath(a,start,fromSpot?fromSpot.rect:null,s.rect,o);
-  const path=run(opts)||run({...opts,clear:4})||run({through:true,clear:4})||[start,[cx,cy]];
+  const fc=fromSpot&&[fromSpot.rect[0]+fromSpot.rect[2]/2,fromSpot.rect[1]+fromSpot.rect[3]/2],block=(a.rooms||[]).filter(p=>!inPoly(p,cx,cy)&&!(fc&&inPoly(p,fc[0],fc[1])));
+  const opts={through:outside,margin:enclosed?0:14,block},run=o=>findPath(a,start,fromSpot?fromSpot.rect:null,s.rect,o);
+  const path=run(opts)||run({...opts,clear:4})||run({through:true,clear:4,block})||[start,[cx,cy]];
   path[0]=start;path[path.length-1]=edgePoint(s.rect,path[path.length-1]);pts=path;d=smooth(path)}
  if(state.reversed){pts=[...pts].reverse()}
  const xs=pts.map(p=>p[0]).concat(s.rect[0],s.rect[0]+s.rect[2]),ys=pts.map(p=>p[1]).concat(s.rect[1],s.rect[1]+s.rect[3]);
