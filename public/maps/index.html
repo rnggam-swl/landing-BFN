@@ -461,13 +461,13 @@ const AREAS={
   walk:[[[801,190],[2417,190],[2417,975],[2477,975],[2477,1445],[2419,1445],[2419,2045],[2477,2045],[2477,2280],[576,2280],[576,2045],[549,2045],[549,1326],[457,1326],[457,1089],[726,1089],[726,999],[801,999]],[[1400,2280],[1650,2280],[1650,2345],[1400,2345]]],doors:[[549,1170],[549,1245],[817,1298],[932,1326],[1053,1298],[1992,1457],[1365,2045],[1455,2045],[1595,2045],[1685,2045],[1360,2280],[1452,2280],[1595,2280],[1690,2280],[2244,2001],[2244,2114],[1237,856],[2021,472],[2477,1060],[2477,1210],[2477,1360]]}
 };
 
-/* Door test variants: ?door=dash|dash-blue|line|line-blue|gap|jamb|jamb-dash and ?gate=dash|open */
+/* Test variants: ?door=dash|dash-blue|line|line-blue|gap|jamb|jamb-dash, ?gate=dash|open and ?route=smooth|rigid */
 const testParams=new URLSearchParams(location.search);
 const doorParam=testParams.get('door')==='blue'?'dash-blue':testParams.get('door');
 const DOOR_OPTIONS=[['dash','Dash'],['dash-blue','Dash biru'],['line','Garis'],['line-blue','Garis biru'],['gap','Tanpa garis'],['jamb','Kusen biru'],['jamb-dash','Kusen + dash']];
 let DOOR=DOOR_OPTIONS.some(o=>o[0]===doorParam)?doorParam:'dash';
 let GATE=['dash','open'].includes(testParams.get('gate'))?testParams.get('gate'):(DOOR==='gap'?'open':'dash');
-let testPanel=testParams.get('panel')!=='0',vpOpen=true;
+let testPanel=testParams.get('panel')!=='0',vpOpen=true,ROUTE=testParams.get('route')==='rigid'?'rigid':'smooth';
 const state={lang:'en',area:'expo',filter:null,q:'',sel:null,route:null,reversed:false,mini:false};
 const t=()=>COPY[state.lang];
 const catName=c=>CAT[c][state.lang==='en'?0:1];
@@ -542,8 +542,9 @@ function renderVariants(){
  const btn=(k,val,label,on)=>`<button data-${k}="${val}" aria-pressed="${on}">${label}</button>`,close=`<button class="vp-x" data-vp="collapse" aria-label="Kecilkan panel varian">${ic('x',14)}</button>`;
  v.classList.toggle('mini',!vpOpen);
  if(!vpOpen){v.innerHTML=`<button class="vp-open" data-vp="expand">Varian pintu ${ic('chevron-down',14)}</button>`;return}
- const gate=dr.gate?`<div class="vp-row"><span>Gerbang</span><div class="vp-opts">${btn('gate','dash','Ikuti pintu',GATE==='dash')}${btn('gate','open','Terbuka',GATE==='open')}</div>${close}</div>`:'';
- v.innerHTML=`<div class="vp-row"><span>Pintu</span><div class="vp-opts">${DOOR_OPTIONS.map(([k,l])=>btn('door',k,l,DOOR===k)).join('')}</div>${gate?'':close}</div>${gate}`}
+ const gate=dr.gate?`<div class="vp-row"><span>Gerbang</span><div class="vp-opts">${btn('gate','dash','Ikuti pintu',GATE==='dash')}${btn('gate','open','Terbuka',GATE==='open')}</div></div>`:'';
+ const route=`<div class="vp-row"><span>Rute</span><div class="vp-opts">${btn('route','smooth','Halus',ROUTE==='smooth')}${btn('route','rigid','Siku 90°',ROUTE==='rigid')}</div></div>`;
+ v.innerHTML=`<div class="vp-row"><span>Pintu</span><div class="vp-opts">${DOOR_OPTIONS.map(([k,l])=>btn('door',k,l,DOOR===k)).join('')}</div>${close}</div>${gate}${route}`}
 function sizeJambs(){const h=6/(units().ppu*cam.k);document.querySelectorAll('.jamb').forEach(p=>{const y=+p.dataset.y;p.setAttribute('d',`M${p.dataset.x} ${y-h}V${y+h}`)})}
 function setVariant(door,gate){DOOR=door;GATE=gate;$('#doors').innerHTML=doorSvg();sizeJambs();renderVariants();syncUrl()}
 function syncDim(){const a=AREAS[state.area];plan.querySelectorAll('.spot').forEach(g=>{const s=a.spots.find(x=>x.id===g.dataset.id);g.classList.toggle('dim',!matches(s))})}
@@ -614,11 +615,11 @@ function findPath(a,start,startRect,goalRect,opt={}){
  const step=16,[vx,vy,vw,vh]=a.vb,W=Math.ceil(vw/step),H=Math.ceil(vh/step),idx=(c,r)=>r*W+c;
  const free=new Uint8Array(W*H),solid=a.spots.filter(s=>!s.region),bar=barriers(a);
  for(let r=0;r<H;r++)for(let c=0;c<W;c++){const x=vx+c*step,y=vy+r*step;
-  const near=inRect(goalRect,x,y,48)||(startRect&&inRect(startRect,x,y,48))||Math.hypot(x-start[0],y-start[1])<56;
+  const nearGoal=inRect(goalRect,x,y,48),near=nearGoal||(startRect&&inRect(startRect,x,y,48))||Math.hypot(x-start[0],y-start[1])<56;
   let ok=near||a.walk.some(p=>inPoly(p,x,y));
   if(ok&&!near)ok=!solid.some(s=>inRect(s.rect,x,y,opt.clear??14));
   if(ok&&opt.block&&opt.block.some(p=>inPoly(p,x,y)))ok=false;
-  if(ok&&!(opt.through&&near)){
+  if(ok&&!(opt.through&&nearGoal)){
    if(bar.closed.some(p=>inPoly(p,x,y)))ok=false;
    else if(bar.segs.some(([p,q])=>segDist(p,q,x,y)<(opt.clear?6:12))&&!a.doors.some(d=>Math.hypot(x-d[0],y-d[1])<44)&&!(a.opening&&inRect(a.opening,x,y)))ok=false}
   free[idx(c,r)]=ok?1:0}
@@ -627,6 +628,15 @@ function findPath(a,start,startRect,goalRect,opt={}){
  const gx=goalRect[0]+goalRect[2]/2,gy=goalRect[1]+goalRect[3]/2,h=(c,r)=>Math.hypot(vx+c*step-gx,vy+r*step-gy);
  const heap=[];const push=(f,i)=>{heap.push([f,i]);let n=heap.length-1;while(n>0){const u=(n-1)>>1;if(heap[u][0]<=heap[n][0])break;[heap[u],heap[n]]=[heap[n],heap[u]];n=u}};
  const pop=()=>{const top=heap[0],l=heap.pop();if(heap.length){heap[0]=l;let n=0;for(;;){let m=n,a=2*n+1,b=a+1;if(a<heap.length&&heap[a][0]<heap[m][0])m=a;if(b<heap.length&&heap[b][0]<heap[m][0])m=b;if(m===n)break;[heap[m],heap[n]]=[heap[n],heap[m]];n=m}}return top};
+ if(opt.ortho){
+  const G=new Float64Array(W*H*4).fill(Infinity),PV=new Int32Array(W*H*4).fill(-1),D=[[1,0],[-1,0],[0,1],[0,-1]],turn=step*6,hm=(c,r)=>Math.abs(vx+c*step-gx)+Math.abs(vy+r*step-gy);
+  free[s0]=1;for(let d=0;d<4;d++){G[s0*4+d]=0;push(hm(sc,sr),s0*4+d)}let fin=-1;
+  while(heap.length){const[,s]=pop(),i=s>>2,d=s&3,c=i%W,r=(i-c)/W;
+   if(inRect(goalRect,vx+c*step,vy+r*step,opt.margin??14)){fin=s;break}
+   for(let nd=0;nd<4;nd++){const nc=c+D[nd][0],nr=r+D[nd][1];if(nc<0||nr<0||nc>=W||nr>=H)continue;const n=idx(nc,nr);if(!free[n])continue;const ns=n*4+nd,w=G[s]+step+(nd===d?0:turn);if(w<G[ns]){G[ns]=w;PV[ns]=s;push(w+hm(nc,nr),ns)}}}
+  if(fin<0)return null;
+  const raw=[];for(let s=fin;s>=0;s=PV[s]){const i=s>>2,c=i%W;raw.unshift([vx+c*step,vy+(i-c)/W*step])}
+  return raw}
  g[s0]=0;free[s0]=1;push(h(sc,sr),s0);let end=-1;
  while(heap.length){const[,i]=pop(),c=i%W,r=(i-c)/W;
   if(inRect(goalRect,vx+c*step,vy+r*step,opt.margin??14)){end=i;break}
@@ -641,19 +651,34 @@ function smooth(pts){
  let d=`M${pts[0][0]} ${pts[0][1]}`;
  for(let i=1;i<pts.length-1;i++){const p=pts[i-1],c=pts[i],n=pts[i+1],a=Math.hypot(c[0]-p[0],c[1]-p[1]),b=Math.hypot(n[0]-c[0],n[1]-c[1]),r=Math.min(40,a/2,b/2),q=(u,l)=>[c[0]+(u[0]-c[0])*r/l,c[1]+(u[1]-c[1])*r/l],e=q(p,a),f=q(n,b);d+=`L${e[0].toFixed(1)} ${e[1].toFixed(1)}Q${c[0]} ${c[1]} ${f[0].toFixed(1)} ${f[1].toFixed(1)}`}
  const l=pts[pts.length-1];return d+`L${l[0]} ${l[1]}`}
+function orthoPoints(start,raw,rect){
+ const pts=[start],f=raw[0],n=raw[1]||f;
+ if(start[0]!==f[0]&&start[1]!==f[1])pts.push(n[1]===f[1]?[start[0],f[1]]:[f[0],start[1]]);
+ pts.push(...raw);
+ const l=raw[raw.length-1],e=edgePoint(rect,l);
+ if(e[0]!==l[0]&&e[1]!==l[1])pts.push([l[0],e[1]]);
+ pts.push(e);
+ const out=[];
+ for(const p of pts){const q=out[out.length-1];if(q&&q[0]===p[0]&&q[1]===p[1])continue;out.push(p);
+  while(out.length>=3){const[a,b,c]=out.slice(-3);if((a[0]===b[0]&&b[0]===c[0])||(a[1]===b[1]&&b[1]===c[1]))out.splice(-2,1);else break}}
+ /* Fold a tiny first or last jog into the next segment so the line starts and ends straight */
+ const fold=arr=>{if(arr.length<3)return;const[a,b,c]=arr;if(Math.abs(b[0]-a[0])+Math.abs(b[1]-a[1])>=9)return;if(b[1]===a[1]&&b[0]===c[0]){b[0]=c[0]=a[0];arr.splice(1,1)}else if(b[0]===a[0]&&b[1]===c[1]){b[1]=c[1]=a[1];arr.splice(1,1)}};
+ fold(out);out.reverse();fold(out);out.reverse();
+ return out}
 function edgePoint(r,p){return[clamp(p[0],r[0],r[0]+r[2]),clamp(p[1],r[1],r[1]+r[3])]}
 function buildRoute(){
  const s=spotById(state.sel);if(!s)return null;
  const a=AREAS[s.area],fromSpot=state.routeFrom&&state.routeFrom!=='entrance'?spotById(state.routeFrom):null;
  let pts,d;const live=LIVE_ROUTE[s.area+':'+s.id];
- if(!fromSpot&&live){d=live.d;pts=live.pts}
+ if(!fromSpot&&live&&ROUTE!=='rigid'){d=live.d;pts=live.pts}
  else{
   const start=fromSpot?[fromSpot.rect[0]+fromSpot.rect[2]/2,fromSpot.rect[1]+fromSpot.rect[3]/2]:a.entrance;
   const cx=s.rect[0]+s.rect[2]/2,cy=s.rect[1]+s.rect[3]/2,outside=!a.walk.some(p=>inPoly(p,cx,cy)),enclosed=s.region||s.path||s.id==='holding-room';
   const fc=fromSpot&&[fromSpot.rect[0]+fromSpot.rect[2]/2,fromSpot.rect[1]+fromSpot.rect[3]/2],block=(a.rooms||[]).filter(p=>!inPoly(p,cx,cy)&&!(fc&&inPoly(p,fc[0],fc[1])));
-  const opts={through:outside,margin:enclosed?0:14,block},run=o=>findPath(a,start,fromSpot?fromSpot.rect:null,s.rect,o);
-  const path=run(opts)||run({...opts,clear:4})||run({through:true,clear:4,block})||[start,[cx,cy]];
-  path[0]=start;path[path.length-1]=edgePoint(s.rect,path[path.length-1]);pts=path;d=smooth(path)}
+  const ortho=ROUTE==='rigid',opts={through:outside,margin:enclosed?0:14,block,ortho},run=o=>findPath(a,start,fromSpot?fromSpot.rect:null,s.rect,o);
+  const path=run(opts)||run({...opts,clear:4})||run({through:true,clear:4,block,ortho});
+  if(ortho){pts=orthoPoints(start,path||[[start[0],cy],[cx,cy]],s.rect);d='M'+pts.map(p=>p.join(' ')).join('L')}
+  else{pts=path||[start,[cx,cy]];pts[0]=start;pts[pts.length-1]=edgePoint(s.rect,pts[pts.length-1]);d=smooth(pts)}}
  if(state.reversed){pts=[...pts].reverse()}
  const xs=pts.map(p=>p[0]).concat(s.rect[0],s.rect[0]+s.rect[2]),ys=pts.map(p=>p[1]).concat(s.rect[1],s.rect[1]+s.rect[3]);
  const x=Math.min(...xs),y=Math.min(...ys);
@@ -663,7 +688,8 @@ function drawRoute(){
  cancelAnimationFrame(walker);
  const g=$('#routeG');if(!g)return;const r=state.route,s=spotById(state.sel);
  if(!r||!s||s.area!==state.area){g.innerHTML='';return}
- g.innerHTML=`<path class="r0 draw" pathLength="1" d="${r.d}" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round"/><path class="r1 draw" pathLength="1" d="${r.d}" fill="none" stroke="#0093fd" stroke-linecap="round" stroke-linejoin="round"/><path class="r2" d="${r.d}" fill="none" stroke="#fff" stroke-opacity=".95" stroke-linecap="round"/><circle class="r3" cx="${r.start[0]}" cy="${r.start[1]}" fill="#041365" stroke="#fff"/><circle class="r4" cx="${r.end[0]}" cy="${r.end[1]}" fill="#e4730f" stroke="#fff"/>`;
+ const join=ROUTE==='rigid'?'miter':'round';
+ g.innerHTML=`<path class="r0 draw" pathLength="1" d="${r.d}" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="${join}"/><path class="r1 draw" pathLength="1" d="${r.d}" fill="none" stroke="#0093fd" stroke-linecap="round" stroke-linejoin="${join}"/><path class="r2" d="${r.d}" fill="none" stroke="#fff" stroke-opacity=".95" stroke-linecap="round" stroke-linejoin="${join}"/><circle class="r3" cx="${r.start[0]}" cy="${r.start[1]}" fill="#041365" stroke="#fff"/><circle class="r4" cx="${r.end[0]}" cy="${r.end[1]}" fill="#e4730f" stroke="#fff"/>`;
  sizeRoute();
  const path=g.querySelector('.r1'),dot=g.querySelector('.r4');
  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
@@ -692,7 +718,7 @@ function renderDetail(){
 }
 
 /* Actions */
-function syncUrl(){try{const p=new URLSearchParams(location.search);p.set('area',state.area);for(const k of ['booth','from','lang','door','gate','panel'])p.delete(k);if(DOOR!=='dash')p.set('door',DOOR);if(GATE==='open'&&DOOR!=='gap')p.set('gate','open');if(GATE==='dash'&&DOOR==='gap')p.set('gate','dash');if(!testPanel)p.set('panel','0');if(state.sel)p.set('booth',state.sel);if(state.route)p.set('from',state.routeFrom||'entrance');if(state.lang==='id')p.set('lang','id');history.replaceState(null,'','?'+p)}catch(e){}}
+function syncUrl(){try{const p=new URLSearchParams(location.search);p.set('area',state.area);for(const k of ['booth','from','lang','door','gate','panel','route'])p.delete(k);if(ROUTE==='rigid')p.set('route','rigid');if(DOOR!=='dash')p.set('door',DOOR);if(GATE==='open'&&DOOR!=='gap')p.set('gate','open');if(GATE==='dash'&&DOOR==='gap')p.set('gate','dash');if(!testPanel)p.set('panel','0');if(state.sel)p.set('booth',state.sel);if(state.route)p.set('from',state.routeFrom||'entrance');if(state.lang==='id')p.set('lang','id');history.replaceState(null,'','?'+p)}catch(e){}}
 function setArea(a,ms=0){if(state.area===a)return;state.area=a;const s=spotById(state.sel);if(s&&s.area!==a){state.sel=null;state.route=null;state.mini=false}$('#tabs').querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.area===a));renderMap();renderDetail();renderList();cancelAnimationFrame(camAnim);Object.assign(cam,fitCamera());applyCam();drawRoute();syncUrl()}
 function select(id){
  const s=spotById(id);if(!s)return;
@@ -709,6 +735,7 @@ document.addEventListener('click',e=>{
  const b=e.target.closest('button,[data-id]');const pop=$('#pop'),more=$('#more');
  if(b&&b.dataset.door){const d=b.dataset.door;setVariant(d,d==='gap'?'open':DOOR==='gap'?'dash':GATE);return}
  if(b&&b.dataset.gate){setVariant(DOOR,b.dataset.gate);return}
+ if(b&&b.dataset.route){ROUTE=b.dataset.route;if(state.route){state.route=buildRoute();drawRoute();settle(400)}renderVariants();syncUrl();return}
  if(b&&b.dataset.vp){vpOpen=b.dataset.vp==='expand';renderVariants();return}
  if(pop&&pop.classList.contains('open')&&!e.target.closest('#pop,#more')){pop.classList.remove('open');more.setAttribute('aria-expanded','false')}
  if(!b)return;
